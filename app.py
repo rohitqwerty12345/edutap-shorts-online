@@ -241,20 +241,25 @@ def compose_full(local_video_path: str, caption_png: Path, output_path: Path, lo
         "[bgvcap][logo]overlay=x={lx}:y={ly}:format=auto"
     ).format(w=OUT_W, h=available_h, vt=video_top, cy=caption_y, lx=logo_margin_x, ly=logo_margin_y)
 
-    cmd = [
-        "ffmpeg","-y",
-        "-f","lavfi","-i", f"color=0x00BCD5:size={OUT_W}x{OUT_H}:rate={fps}",
-        "-i", local_video_path,
-        "-loop","1","-i", str(caption_png),
-        "-i", logo_path,
-        "-filter_complex", filter_graph,
-        "-shortest",
-        *_cpu_vcodec_args(),
-        "-threads","0","-filter_complex_threads","4",
-        "-c:a","aac","-b:a","160k",
-        "-movflags","+faststart",
-        str(output_path)
-    ]
+cmd = [
+    "ffmpeg", "-y",
+    "-f", "lavfi", "-i", f"color=0x00BCD5:size={OUT_W}x{OUT_H}:rate={fps}",
+    "-i", local_video_path,
+    "-loop", "1", "-i", str(caption_png),
+    "-i", logo_path,
+    "-filter_complex", filter_graph,
+    "-shortest",
+    # CPU-friendly H.264
+    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "18", "-pix_fmt", "yuv420p",
+    # Keep audio simple
+    "-c:a", "aac", "-b:a", "128k",
+    # Keep encoder resource usage down
+    "-threads", "2", "-filter_complex_threads", "1",
+    # Web-friendly MP4
+    "-movflags", "+faststart",
+    str(output_path)
+]
+
     subprocess.check_call(cmd)
 
 def compose_mid(local_video_path: str, caption_png: Path, output_path: Path, logo_path: str):
@@ -284,20 +289,25 @@ def compose_mid(local_video_path: str, caption_png: Path, output_path: Path, log
         "[bgvlogo][2:v]overlay=x={cx}:y={cy}:format=auto"
     ).format(vx=vid_x, vy=vid_y, lx=logo_x, ly=logo_y, cx=cap_x, cy=cap_y)
 
-    cmd = [
-        "ffmpeg","-y",
-        "-f","lavfi","-i", f"color=0x00BCD5:size={OUT_W}x{OUT_H}:rate={fps}",
-        "-i", local_video_path,
-        "-loop","1","-i", str(caption_png),
-        "-i", logo_path,
-        "-filter_complex", filter_graph,
-        "-shortest",
-        *_cpu_vcodec_args(),
-        "-threads","0","-filter_complex_threads","4",
-        "-c:a","aac","-b:a","160k",
-        "-movflags","+faststart",
-        str(output_path)
-    ]
+cmd = [
+    "ffmpeg", "-y",
+    "-f", "lavfi", "-i", f"color=0x00BCD5:size={OUT_W}x{OUT_H}:rate={fps}",
+    "-i", local_video_path,
+    "-loop", "1", "-i", str(caption_png),
+    "-i", logo_path,
+    "-filter_complex", filter_graph,
+    "-shortest",
+    # CPU-friendly H.264
+    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "18", "-pix_fmt", "yuv420p",
+    # Keep audio simple
+    "-c:a", "aac", "-b:a", "128k",
+    # Keep encoder resource usage down
+    "-threads", "2", "-filter_complex_threads", "1",
+    # Web-friendly MP4
+    "-movflags", "+faststart",
+    str(output_path)
+]
+
     subprocess.check_call(cmd)
 
 # -------------------- filenames & cleanup --------------------

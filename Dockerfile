@@ -18,4 +18,5 @@ ENV PORT=8080
 EXPOSE 8080
 
 # 4) run gunicorn on Railway's assigned $PORT
-CMD ["sh","-c","gunicorn -w 2 -k gthread -b 0.0.0.0:${PORT} app:app"]
+CMD gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 600 app:app
+
