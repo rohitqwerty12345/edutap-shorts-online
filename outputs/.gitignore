@@ -1,0 +1,17 @@
+# virtual env / editor / cache
+venv/
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.vscode/
+.idea/
+
+# runtime outputs
+outputs/*
+!outputs/.gitkeep
+
+# OS files
+.DS_Store
+Thumbs.db

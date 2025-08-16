@@ -1,0 +1,5 @@
+Flask
+Pillow
+moviepy
+requests
+gunicorn
