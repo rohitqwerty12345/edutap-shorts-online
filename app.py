@@ -134,44 +134,29 @@ def derive_fps(meta) -> int:
         return 25
 
 def has_nvenc() -> bool:
+    """
+    Return True only if NVENC really works (GPU + libcuda available).
+    We do a quick 1-second test encode. If anything fails, return False.
+    You can also force CPU by setting env FORCE_CPU=1.
+    """
+    if os.environ.get("FORCE_CPU", "").strip():
+        return False
     try:
-        encs = subprocess.check_output(["ffmpeg","-hide_banner","-encoders"], text=True, stderr=subprocess.STDOUT)
-        return ("h264_nvenc" in encs)
+        subprocess.check_call(
+            [
+                "ffmpeg", "-v", "error",
+                "-f", "lavfi", "-i", "color=c=black:s=128x128:r=25",
+                "-t", "1",
+                "-c:v", "h264_nvenc",
+                "-f", "null", "-"
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.STDOUT
+        )
+        return True
     except Exception:
         return False
 
-# -------------------- Caption rendering (Pillow) --------------------
-def _load_font(size: int) -> ImageFont.FreeTypeFont|ImageFont.ImageFont:
-    # Try bundled Poppins SemiBold first; fallback to default PIL font
-    candidates = [
-        FONTS_DIR / "Poppins-SemiBold.ttf",
-        FONTS_DIR / "Poppins-SemiBold.otf",
-    ]
-    for p in candidates:
-        if p.exists():
-            try:
-                return ImageFont.truetype(str(p), size=size)
-            except Exception:
-                pass
-    return ImageFont.load_default()
-
-def _wrap_text(text: str, font: ImageFont.ImageFont, max_w: int, draw: ImageDraw.ImageDraw):
-    # simple word-wrap using font.getlength if available
-    words = (text or "").replace("\r","").split()
-    lines, curr = [], ""
-    for w in words:
-        test = (curr + " " + w).strip()
-        width = draw.textlength(test, font=font) if hasattr(draw, "textlength") else font.getsize(test)[0]
-        if width <= max_w or not curr:
-            curr = test
-        else:
-            lines.append(curr)
-            curr = w
-    if curr:
-        lines.append(curr)
-    if not lines:
-        lines = [""]
-    return lines
 
 def render_caption_png_pillow(text: str, out_path: Path, *,
                               max_width: int = 1000,
