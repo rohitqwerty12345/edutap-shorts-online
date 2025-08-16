@@ -1,22 +1,21 @@
-# ---- base image
 FROM python:3.11-slim
 
-# ---- system deps (ffmpeg gives us ffmpeg + ffprobe)
+# 1) ffmpeg (needed by your app)
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ffmpeg \
  && rm -rf /var/lib/apt/lists/*
 
-# ---- python deps
+# 2) app deps
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt gunicorn
+RUN pip install --no-cache-dir -r requirements.txt
 
-# ---- app files
+# 3) app code
 COPY . .
 
-# Railway provides $PORT
+ENV PYTHONUNBUFFERED=1
 ENV PORT=8080
 EXPOSE 8080
 
-# Gunicorn server for Flask
-CMD ["gunicorn", "-w", "2", "-k", "gthread", "-t", "120", "-b", "0.0.0.0:${PORT}", "app:app"]
+# 4) run gunicorn on Railway's assigned $PORT
+CMD ["sh","-c","gunicorn -w 2 -k gthread -b 0.0.0.0:${PORT} app:app"]
