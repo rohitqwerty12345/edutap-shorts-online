@@ -1,10 +1,9 @@
-# app.py — EduTap Shorts (Railway-ready, single file)
-# - Clean dark UI (Jinja-safe template)
-# - Upload OR link (GDrive / OneDrive / direct)
-# - Full / Mid layouts with fixed logo
-# - Caption rendering via Pillow
-# - FFmpeg caps (fps & threads) to avoid OOM/SIGKILL on small plans
-# - Auto-clean outputs
+# app.py — EduTap Shorts (CPU-only, Railway-ready, single file)
+# - Clean dark UI, multi-item, Upload/Link, Full/Mid layouts
+# - Fixed logo loaded from /assets/logo.png (not shown in UI)
+# - Caption rendering with Pillow (no headless browser)
+# - FFmpeg always uses libx264 (CPU). No NVENC/GPU paths at all.
+# - Auto-cleans /outputs after TTL to keep disk small.
 
 from __future__ import annotations
 from pathlib import Path
@@ -18,23 +17,17 @@ from urllib.parse import urlparse, parse_qs, urlencode
 APP_DIR = Path(__file__).parent.resolve()
 ASSETS_DIR = APP_DIR / "assets"
 FONTS_DIR = ASSETS_DIR / "fonts"
-LOGO_PATH = str((ASSETS_DIR / "logo.png").resolve())           # fixed logo (hidden from UI)
-OUTPUTS_DIR = APP_DIR / "outputs"                              # public downloads
+LOGO_PATH = str((ASSETS_DIR / "logo.png").resolve())         # fixed logo (hidden from UI)
+OUTPUTS_DIR = APP_DIR / "outputs"                            # public downloads
 OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
 
-# UI accent color
+# online-friendly defaults
+OUT_W, OUT_H = 1080, 1920
 ACCENT = "#00BCD5"
 
-# Runtime caps (safe for Railway Hobby by default)
-TTL_SECONDS = int(os.environ.get("TTL_SECONDS", "3600"))   # auto-delete after 1 hour
-CLEAN_INTERVAL = int(os.environ.get("CLEAN_INTERVAL", "600"))
-
-# FFmpeg resource caps (can be tuned in Railway Variables)
-FF_THREADS = os.environ.get("FF_THREADS", "1")             # encoder threads
-FF_FILTER_THREADS = os.environ.get("FF_FILTER_THREADS", "1")  # filter graph threads
-
-# Output canvas
-OUT_W, OUT_H = 1080, 1920
+# auto-clean (seconds); Railway can override via env
+TTL_SECONDS   = int(os.environ.get("TTL_SECONDS", "3600"))    # 1 hour
+CLEAN_INTERVAL = int(os.environ.get("CLEAN_INTERVAL", "600")) # every 10 min
 
 # -------------------- Flask --------------------
 app = Flask(__name__)
@@ -134,24 +127,17 @@ def ffprobe_json(path: str):
     return json.loads(out)
 
 def derive_fps(meta) -> int:
-    """
-    Parse source FPS and cap it to 30 to keep CPU/RAM usage stable on small instances.
-    """
+    """Clamp to a CPU-friendly FPS (24–30)."""
     try:
         vstream = next(s for s in meta["streams"] if s.get("codec_type")=="video")
         rfr = vstream.get("r_frame_rate") or "25/1"
         num, den = rfr.split("/")
         fps = max(1, int(round(float(num)/float(den)))) if float(den)!=0 else 25
-        return max(10, min(fps, 30))   # cap to [10..30]
     except Exception:
-        return 25
-
-def has_nvenc() -> bool:
-    try:
-        encs = subprocess.check_output(["ffmpeg","-hide_banner","-encoders"], text=True, stderr=subprocess.STDOUT)
-        return ("h264_nvenc" in encs)
-    except Exception:
-        return False
+        fps = 25
+    # Clamp for CPU on Hobby plan
+    fps = max(24, min(fps, 30))
+    return fps
 
 # -------------------- Caption rendering (Pillow) --------------------
 def _load_font(size: int) -> ImageFont.FreeTypeFont|ImageFont.ImageFont:
@@ -169,6 +155,7 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont|ImageFont.ImageFont:
     return ImageFont.load_default()
 
 def _wrap_text(text: str, font: ImageFont.ImageFont, max_w: int, draw: ImageDraw.ImageDraw):
+    # simple word-wrap using textlength if available
     words = (text or "").replace("\r","").split()
     lines, curr = [], ""
     for w in words:
@@ -182,7 +169,7 @@ def _wrap_text(text: str, font: ImageFont.ImageFont, max_w: int, draw: ImageDraw
     if curr:
         lines.append(curr)
     if not lines:
-        lines = [""]  # at least one empty line
+        lines = [""]
     return lines
 
 def render_caption_png_pillow(text: str, out_path: Path, *,
@@ -198,6 +185,7 @@ def render_caption_png_pillow(text: str, out_path: Path, *,
     dr = ImageDraw.Draw(dummy)
     lines = _wrap_text(text, font, max_width, dr)
 
+    # measure
     ascent, descent = font.getmetrics() if hasattr(font, "getmetrics") else (font.size, 0)
     line_px = int((ascent+descent) * line_height) if ascent else int(font.size*line_height)
     text_w = 0
@@ -213,20 +201,26 @@ def render_caption_png_pillow(text: str, out_path: Path, *,
     dr2 = ImageDraw.Draw(img)
     dr2.rounded_rectangle((0,0,box_w,box_h), radius, fill=(255,255,255,255))
 
+    # draw lines centered horizontally
     y = pad_y
     for ln in lines:
-        w = dr2.textlength(ln, font=font) if hasattr(dr2,"textlength") else font.getsize(ln)[0]
+        w = dr2.textlength(ln, font=font) if hasattr(dr2, "textlength") else font.getsize(ln)[0]
         x = (box_w - int(w))//2
         dr2.text((x,y), ln, font=font, fill=(0,0,0,255))
         y += line_px
 
     img.save(out_path, "PNG")
 
-# -------------------- Compose (FFmpeg) --------------------
+# -------------------- Compose (FFmpeg, CPU-only) --------------------
+def _cpu_vcodec_args():
+    # Conservative settings for small CPU/RAM (Railway Hobby)
+    return ["-c:v","libx264","-preset","veryfast","-crf","20","-pix_fmt","yuv420p","-threads","1"]
+
 def compose_full(local_video_path: str, caption_png: Path, output_path: Path, logo_path: str):
     meta = ffprobe_json(local_video_path)
-    fps = derive_fps(meta)  # capped to <= 30
+    fps = derive_fps(meta)
 
+    # measure caption & logo
     with Image.open(caption_png) as im: cap_w, cap_h = im.size
     with Image.open(logo_path) as lg:
         lw, lh = lg.size
@@ -253,23 +247,16 @@ def compose_full(local_video_path: str, caption_png: Path, output_path: Path, lo
         f"[bgvcap][logo]overlay=x={logo_margin_x}:y={logo_margin_y}:format=auto"
     )
 
-    vcodec = (["-c:v","h264_nvenc","-preset","p5","-rc","vbr","-cq","23","-b:v","0","-pix_fmt","yuv420p"]
-              if has_nvenc() else
-              ["-c:v","libx264","-preset","veryfast","-crf","20","-pix_fmt","yuv420p"])
-
     cmd = [
         "ffmpeg","-y",
-        "-f","lavfi","-i", f"color=0x00BCD5:size={OUT_W}x{OUT_H}:rate={fps}",
+        "-f","lavfi","-i", f"color={ACCENT}:size={OUT_W}x{OUT_H}:rate={fps}",
         "-i", local_video_path,
         "-loop","1","-i", str(caption_png),
         "-i", logo_path,
         "-filter_complex", filter_graph,
-        "-r","30",  # force stable output fps
         "-shortest",
-        *vcodec,
-        "-threads", FF_THREADS,
-        "-filter_complex_threads", FF_FILTER_THREADS,
-        "-c:a","aac","-b:a","160k",
+        *_cpu_vcodec_args(),
+        "-c:a","aac","-b:a","128k",
         "-movflags","+faststart",
         str(output_path)
     ]
@@ -278,7 +265,6 @@ def compose_full(local_video_path: str, caption_png: Path, output_path: Path, lo
 def compose_mid(local_video_path: str, caption_png: Path, output_path: Path, logo_path: str):
     meta = ffprobe_json(local_video_path)
     fps = derive_fps(meta)
-
     vstream = next(s for s in meta["streams"] if s["codec_type"]=="video")
     src_w = int(vstream.get("width")); src_h = int(vstream.get("height"))
 
@@ -303,23 +289,16 @@ def compose_mid(local_video_path: str, caption_png: Path, output_path: Path, log
         f"[bgvlogo][2:v]overlay=x={cap_x}:y={cap_y}:format=auto"
     )
 
-    vcodec = (["-c:v","h264_nvenc","-preset","p5","-rc","vbr","-cq","23","-b:v","0","-pix_fmt","yuv420p"]
-              if has_nvenc() else
-              ["-c:v","libx264","-preset","veryfast","-crf","20","-pix_fmt","yuv420p"])
-
     cmd = [
         "ffmpeg","-y",
-        "-f","lavfi","-i", f"color=0x00BCD5:size={OUT_W}x{OUT_H}:rate={fps}",
+        "-f","lavfi","-i", f"color={ACCENT}:size={OUT_W}x{OUT_H}:rate={fps}",
         "-i", local_video_path,
         "-loop","1","-i", str(caption_png),
         "-i", logo_path,
         "-filter_complex", filter_graph,
-        "-r","30",
         "-shortest",
-        *vcodec,
-        "-threads", FF_THREADS,
-        "-filter_complex_threads", FF_FILTER_THREADS,
-        "-c:a","aac","-b:a","160k",
+        *_cpu_vcodec_args(),
+        "-c:a","aac","-b:a","128k",
         "-movflags","+faststart",
         str(output_path)
     ]
@@ -497,10 +476,12 @@ textarea{height:140px;resize:vertical}
     base.setAttribute('data-idx', idx);
     base.querySelector('h4').textContent = 'Video ' + (idx+1);
 
+    // clear inputs & rename
     base.querySelectorAll('input,textarea').forEach(inp=>{
       if(inp.type==='radio'){
         inp.name = 'mode_'+idx;
-        if(inp.value==='upload') inp.checked = true; else inp.checked = false;
+        if(inp.value==='upload') inp.checked = true;
+        else inp.checked = false;
       }else if(inp.type==='file'){
         inp.name = 'file_'+idx; inp.value='';
       }else if(inp.type==='text'){
@@ -594,7 +575,7 @@ def render():
                 ts = time.strftime("%Y%m%d_%H%M%S")
                 candidate = OUTPUTS_DIR / f"{Path(base_name).stem}_{ts}.mp4"
 
-            # Compose
+            # Compose (CPU only)
             if design == "mid":
                 compose_mid(local_video, cap_png, candidate, LOGO_PATH)
             else:
