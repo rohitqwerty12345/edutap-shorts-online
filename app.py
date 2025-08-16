@@ -200,13 +200,7 @@ def render_caption_png_pillow(text: str, out_path: Path, *,
 
     img = Image.new("RGBA", (box_w, box_h), (0,0,0,0))
     dr2 = ImageDraw.Draw(img)
-
-    # rounded rect (white)
-    def rr(draw, xy, r, fill):
-        x0,y0,x1,y1 = xy
-        draw.rounded_rectangle(xy, r, fill=fill)
-
-    rr(dr2, (0,0,box_w,box_h), radius, (255,255,255,255))
+    dr2.rounded_rectangle((0,0,box_w,box_h), radius, fill=(255,255,255,255))
 
     # draw lines centered horizontally
     y = pad_y
@@ -346,57 +340,57 @@ def cleanup_outputs():
 threading.Thread(target=cleanup_outputs, daemon=True).start()
 
 # -------------------- UI --------------------
-HTML = f"""
+HTML = """
 <!doctype html>
 <title>EduTap Shorts</title>
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <style>
-:root {{
-  --bg:#0b1118; --panel:#0f1621; --ring:{ACCENT}; --txt:#e8eef6; --mut:#8aa0b6; --card:#0c141e;
-}}
-*{{box-sizing:border-box}}
-body{{
+:root {
+  --bg:#0b1118; --panel:#0f1621; --ring:{{ accent }}; --txt:#e8eef6; --mut:#8aa0b6; --card:#0c141e;
+}
+*{box-sizing:border-box}
+body{
   margin:0;background:radial-gradient(1200px 600px at 15% -10%,#132031 0%,rgba(19,32,49,0)60%),var(--bg);
   font:15px/1.45 system-ui,Segoe UI,Arial;color:var(--txt);
-}}
-.wrap{{max-width:1200px;margin:38px auto;padding:0 16px}}
-.grid{{display:grid;grid-template-columns:1.2fr .9fr;gap:22px}}
-@media (max-width:980px){{.grid{{grid-template-columns:1fr;}}}}
+}
+.wrap{max-width:1200px;margin:38px auto;padding:0 16px}
+.grid{display:grid;grid-template-columns:1.2fr .9fr;gap:22px}
+@media (max-width:980px){.grid{grid-template-columns:1fr;}}
 
-.panel{{background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.02));border:1px solid #1f2b3a;border-radius:18px;box-shadow:0 0 40px rgba(0,188,213,.22);}}
-.left{{padding:28px;min-height:520px}}
-.right{{padding:18px}}
+.panel{background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.02));border:1px solid #1f2b3a;border-radius:18px;box-shadow:0 0 40px rgba(0,188,213,.22);}
+.left{padding:28px;min-height:520px}
+.right{padding:18px}
 
-h1{{margin:0 0 18px;font-weight:900;font-size:44px;letter-spacing:.2px}}
-h1 .a{{color:{ACCENT}}}
-p.lead{{color:#cde6f7}}
+h1{margin:0 0 18px;font-weight:900;font-size:44px;letter-spacing:.2px}
+h1 .a{color:{{ accent }}}
+p.lead{color:#cde6f7}
 
-label{{display:block;margin:10px 0 6px;font-weight:700;color:#d8e7f8}}
-small{{color:var(--mut)}}
-input[type=text], textarea, select{{
+label{display:block;margin:10px 0 6px;font-weight:700;color:#d8e7f8}
+small{color:var(--mut)}
+input[type=text], textarea, select{
   width:100%;padding:14px;border:1px solid #223246;background:#0a1119;color:var(--txt);
   border-radius:12px;outline:none;font-size:15px
-}}
-textarea{{height:140px;resize:vertical}}
+}
+textarea{height:140px;resize:vertical}
 
-.btn{{display:inline-flex;align-items:center;justify-content:center;gap:10px;background:var(--ring);
-  border:0;color:#00323a;padding:14px 18px;border-radius:12px;font-weight:900;cursor:pointer;font-size:16px}}
-.btn.subtle{{background:#122232;color:#cfe8f2;border:1px solid #1e3347}}
-.controls{{display:flex;gap:12px;align-items:center;margin:10px 0}}
-.row{{display:grid;grid-template-columns:1fr;gap:12px}}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;background:var(--ring);
+  border:0;color:#00323a;padding:14px 18px;border-radius:12px;font-weight:900;cursor:pointer;font-size:16px}
+.btn.subtle{background:#122232;color:#cfe8f2;border:1px solid #1e3347}
+.controls{display:flex;gap:12px;align-items:center;margin:10px 0}
+.row{display:grid;grid-template-columns:1fr;gap:12px}
 
-.cards{{display:flex;gap:14px;overflow-x:auto;padding-bottom:8px}}
-.card{{min-width:460px;max-width:460px;background:var(--card);border:1px solid #173047;border-radius:16px;padding:14px;position:relative}}
-@media(max-width:540px){{.card{{min-width:100%;max-width:100%}}}}
-.card h4{{margin:0 0 10px}}
-.rm{{position:absolute;right:10px;top:10px;width:28px;height:28px;border-radius:8px;border:1px solid #244;cursor:pointer;background:#101b26;color:#9bc}}
-.mode{{display:flex;gap:12px;margin:8px 0}}
-.hidden{{display:none}}
+.cards{display:flex;gap:14px;overflow-x:auto;padding-bottom:8px}
+.card{min-width:460px;max-width:460px;background:var(--card);border:1px solid #173047;border-radius:16px;padding:14px;position:relative}
+@media(max-width:540px){.card{min-width:100%;max-width:100%}}
+.card h4{margin:0 0 10px}
+.rm{position:absolute;right:10px;top:10px;width:28px;height:28px;border-radius:8px;border:1px solid #244;cursor:pointer;background:#101b26;color:#9bc}
+.mode{display:flex;gap:12px;margin:8px 0}
+.hidden{display:none}
 
-#overlay{{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:999}}
-.spinner{{width:64px;height:64px;border:6px solid #fff;border-top-color:{ACCENT};border-radius:50%;animation:spin 1s linear infinite}}
-@keyframes spin{{to{{transform:rotate(360deg)}}}}
-#overlay p{{color:#fff;margin-top:12px;text-align:center;font-weight:700}}
+#overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:999}
+.spinner{width:64px;height:64px;border:6px solid #fff;border-top-color:{{ accent }};border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#overlay p{color:#fff;margin-top:12px;text-align:center;font-weight:700}
 </style>
 
 <div id="overlay"><div style="display:flex;flex-direction:column;align-items:center">
@@ -411,14 +405,14 @@ textarea{{height:140px;resize:vertical}}
     </div>
 
     <div class="right">
-      <form id="renderForm" method="post" action="{{{{ url_for('render') }}}}" enctype="multipart/form-data">
-        {{% with messages = get_flashed_messages() %}}
-          {{% if messages %}}<div style="margin:10px 0 14px;color:#9ef">{{{{ messages[0] }}}}</div>{{% endif %}}
-        {{% endwith %}}
+      <form id="renderForm" method="post" action="{{ url_for('render') }}" enctype="multipart/form-data">
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}<div style="margin:10px 0 14px;color:#9ef">{{ messages[0] }}</div>{% endif %}
+        {% endwith %}
 
         <div class="controls">
-          <label><input type="radio" name="design" value="full" {{% if design=='full' %}}checked{{% endif %}}> Full</label>
-          <label><input type="radio" name="design" value="mid"  {{% if design=='mid' %}}checked{{% endif %}}> Mid</label>
+          <label><input type="radio" name="design" value="full" {% if design=='full' %}checked{% endif %}> Full</label>
+          <label><input type="radio" name="design" value="mid"  {% if design=='mid' %}checked{% endif %}> Mid</label>
           <button type="button" class="btn subtle" onclick="addItem()">+ Add Video</button>
         </div>
 
@@ -455,14 +449,14 @@ textarea{{height:140px;resize:vertical}}
     </div>
   </div>
 
-  {{% if last_files %}}
+  {% if last_files %}
     <div style="max-width:1200px;margin:16px auto 30px">
-      {{% for name in last_files %}}
-        <div style="margin:8px 0">✅ <a style="color:#9ef" href="{{{{ url_for('download', filename=name) }}}}">{{{{ name }}}}</a></div>
-      {{% endfor %}}
-      <div style="color:#8aa0b6;margin-top:10px">Files auto-delete after about {{ttl}} seconds.</div>
+      {% for name in last_files %}
+        <div style="margin:8px 0">✅ <a style="color:#9ef" href="{{ url_for('download', filename=name) }}">{{ name }}</a></div>
+      {% endfor %}
+      <div style="color:#8aa0b6;margin-top:10px">Files auto-delete after about {{ ttl }} seconds.</div>
     </div>
-  {{% endif %}}
+  {% endif %}
 </div>
 
 <script>
@@ -533,7 +527,7 @@ textarea{{height:140px;resize:vertical}}
 # -------------------- Flask routes --------------------
 @app.get("/")
 def index():
-    return render_template_string(HTML, last_files=None, design="full", ttl=TTL_SECONDS)
+    return render_template_string(HTML, last_files=None, design="full", ttl=TTL_SECONDS, accent=ACCENT)
 
 def _save_upload(file_storage, tmp_root) -> str:
     if not file_storage or file_storage.filename == "":
@@ -607,10 +601,10 @@ def render():
 
         if not produced:
             flash("Please add at least one valid item (upload a file or provide a link).")
-            return render_template_string(HTML, last_files=None, design=design, ttl=TTL_SECONDS)
+            return render_template_string(HTML, last_files=None, design=design, ttl=TTL_SECONDS, accent=ACCENT)
 
         flash("Render complete!")
-        return render_template_string(HTML, last_files=produced, design=design, ttl=TTL_SECONDS)
+        return render_template_string(HTML, last_files=produced, design=design, ttl=TTL_SECONDS, accent=ACCENT)
     finally:
         shutil.rmtree(temp_batch, ignore_errors=True)
 
